@@ -12,7 +12,7 @@ func RunPipeline(cmds ...cmd) {
 
 	for _, c := range cmds {
 		wg.Add(1)
-		out := make(chan interface{}) // где старый out
+		out := make(chan interface{})
 
 		go func(wg *sync.WaitGroup, c cmd, in, out chan interface{}) {
 			defer wg.Done()
@@ -26,7 +26,6 @@ func RunPipeline(cmds ...cmd) {
 	wg.Wait()
 }
 
-//in 1@mail 2@mail 3@mail 4@mail.ru
 
 func SelectUsers(in, out chan interface{}) {
 	// 	in - string
