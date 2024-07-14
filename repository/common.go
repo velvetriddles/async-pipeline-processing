@@ -1,4 +1,4 @@
-package main
+package repository
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-type cmd func(in, out chan interface{})
+type Cmd func(in, out chan interface{})
 
 var GetMessagesMaxUsersBatch = 2
 var HasSpamMaxAsyncRequests = 5
@@ -38,7 +38,7 @@ func GetUser(email string) (res User) {
 		log.Printf("[GetUser() %s] args:%v res:%v", time.Since(start), email, res)
 	}(time.Now())
 
-	atomic.AddUint32(&stat.RunGetUser, 1)
+	atomic.AddUint32(&Statistic.RunGetUser, 1)
 
 	time.Sleep(time.Second)
 
@@ -68,19 +68,19 @@ func GetMessages(users ...User) (res []MsgID, err error) {
 	defer func(start time.Time) {
 		log.Printf("[GetMessages() %s] args:%+v res:%v err:%v", time.Since(start), users, res, err)
 	}(time.Now())
-	atomic.AddUint32(&stat.RunGetMessages, 1)
-	atomic.AddUint32(&stat.GetMessagesTotalUsers, uint32(len(users)))
+	atomic.AddUint32(&Statistic.RunGetMessages, 1)
+	atomic.AddUint32(&Statistic.GetMessagesTotalUsers, uint32(len(users)))
 
 	time.Sleep(time.Second)
 
 	if len(users) > GetMessagesMaxUsersBatch {
-		atomic.AddUint32(&stat.ErrorGetMessage, 1)
+		atomic.AddUint32(&Statistic.ErrorGetMessage, 1)
 		log.Printf("to many users in one batch request %v", users)
 		return nil, errors.New("to many users")
 	}
 
 	// это симуляция похода в сервис хранения писем и получения списка писем по юзерам
-	messages := make([]MsgID, 0, 10*len(users)) 
+	messages := make([]MsgID, 0, 10*len(users))
 	for _, u := range users {
 		r := rand.New(rand.NewSource(int64(u.ID))) //nolint: gosec
 		n := r.Intn(10)
@@ -109,7 +109,7 @@ func HasSpam(id MsgID) (res bool, err error) {
 		log.Printf("[HasSpam() %s] args:%+v res:%v err:%v", time.Since(start), id, res, err)
 	}(time.Now())
 
-	atomic.AddUint32(&stat.RunHasSpam, 1)
+	atomic.AddUint32(&Statistic.RunHasSpam, 1)
 
 	ok := antispamRequestStart()
 	defer antispamRequestStop()
@@ -117,7 +117,7 @@ func HasSpam(id MsgID) (res bool, err error) {
 	time.Sleep(100 * time.Millisecond)
 
 	if !ok {
-		atomic.AddUint32(&stat.ErrorHasSpam, 1)
+		atomic.AddUint32(&Statistic.ErrorHasSpam, 1)
 		log.Printf("got antibrute error from antispam for message %d", id)
 		return true, errors.New("too many requests")
 	}
@@ -136,4 +136,4 @@ type Stat struct {
 	ErrorHasSpam          uint32
 }
 
-var stat = Stat{}
+var Statistic = Stat{}

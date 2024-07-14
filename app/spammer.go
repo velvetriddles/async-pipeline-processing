@@ -1,12 +1,13 @@
-package main
+package app
 
 import (
+	"async-pipeline/repository"
 	"fmt"
 	"sort"
 	"sync"
 )
 
-func RunPipeline(cmds ...cmd) {
+func RunPipeline(cmds ...repository.Cmd) {
 	in := make(chan interface{})
 	wg := new(sync.WaitGroup)
 
@@ -14,7 +15,7 @@ func RunPipeline(cmds ...cmd) {
 		wg.Add(1)
 		out := make(chan interface{})
 
-		go func(wg *sync.WaitGroup, c cmd, in, out chan interface{}) {
+		go func(wg *sync.WaitGroup, c repository.Cmd, in, out chan interface{}) {
 			defer wg.Done()
 
 			c(in, out)
@@ -25,7 +26,6 @@ func RunPipeline(cmds ...cmd) {
 
 	wg.Wait()
 }
-
 
 func SelectUsers(in, out chan interface{}) {
 	// 	in - string
@@ -40,7 +40,7 @@ func SelectUsers(in, out chan interface{}) {
 		go func(wg *sync.WaitGroup, email string) {
 			defer wg.Done()
 
-			user := GetUser(email)
+			user := repository.GetUser(email)
 			mu.Lock()
 			defer mu.Unlock()
 			if _, ok := selected[user.ID]; !ok {
@@ -58,14 +58,14 @@ func SelectMessages(in, out chan interface{}) {
 	// 	out - MsgID
 
 	wg := new(sync.WaitGroup)
-	users := make([]User, 0, GetMessagesMaxUsersBatch)
+	users := make([]repository.User, 0, repository.GetMessagesMaxUsersBatch)
 
 	for user := range in {
-		users = append(users, user.(User))
-		if len(users) == GetMessagesMaxUsersBatch {
+		users = append(users, user.(repository.User))
+		if len(users) == repository.GetMessagesMaxUsersBatch {
 			wg.Add(1)
 			go GetMessagesForUsers(wg, out, users...)
-			users = make([]User, 0, GetMessagesMaxUsersBatch)
+			users = make([]repository.User, 0, repository.GetMessagesMaxUsersBatch)
 		}
 	}
 	if len(users) != 0 {
@@ -76,10 +76,10 @@ func SelectMessages(in, out chan interface{}) {
 	wg.Wait()
 }
 
-func GetMessagesForUsers(wg *sync.WaitGroup, out chan interface{}, users ...User) {
+func GetMessagesForUsers(wg *sync.WaitGroup, out chan interface{}, users ...repository.User) {
 	defer wg.Done()
 
-	msgs, err := GetMessages(users...)
+	msgs, err := repository.GetMessages(users...)
 	if err != nil {
 		return
 	}
@@ -92,23 +92,23 @@ func CheckSpam(in, out chan interface{}) {
 	// in - MsgID
 	// out - MsgData
 
-	limit := make(chan struct{}, HasSpamMaxAsyncRequests)
+	limit := make(chan struct{}, repository.HasSpamMaxAsyncRequests)
 	wg := new(sync.WaitGroup)
 
 	for id := range in {
 		wg.Add(1)
-		go func(wg *sync.WaitGroup, out chan interface{}, limit chan struct{}, id MsgID) {
+		go func(wg *sync.WaitGroup, out chan interface{}, limit chan struct{}, id repository.MsgID) {
 			defer wg.Done()
 
 			limit <- struct{}{}
 			defer func() { <-limit }()
 
-			spam, err := HasSpam(id)
+			spam, err := repository.HasSpam(id)
 			if err != nil {
 				return
 			}
-			out <- MsgData{ID: id, HasSpam: spam}
-		}(wg, out, limit, id.(MsgID))
+			out <- repository.MsgData{ID: id, HasSpam: spam}
+		}(wg, out, limit, id.(repository.MsgID))
 	}
 
 	wg.Wait()
@@ -118,9 +118,9 @@ func CombineResults(in, out chan interface{}) {
 	// in - MsgData
 	// out - string
 
-	results := make([]MsgData, 0)
+	results := make([]repository.MsgData, 0)
 	for data := range in {
-		results = append(results, data.(MsgData))
+		results = append(results, data.(repository.MsgData))
 	}
 
 	sort.Slice(results, func(i, j int) bool {
